@@ -35,8 +35,8 @@ class Solver(object):
         self.model = DC2Anet(self.sess, self.flags, self.dataset.image_size, self.dataset(self.flags.is_train),
                              log_path=self.log_out_dir)
 
-        self.saver = tf.train.Saver()
-        self.sess.run(tf.global_variables_initializer())
+        self.saver = tf.compat.v1.train.Saver()
+        self.sess.run(tf.compat.v1.global_variables_initializer())
 
         tf_utils.show_all_variables()
 

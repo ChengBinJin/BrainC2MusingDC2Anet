@@ -1,3 +1,5 @@
 backup/
 src/.idea
 src/__pycache__
+src/brain07
+src/.DS_Store

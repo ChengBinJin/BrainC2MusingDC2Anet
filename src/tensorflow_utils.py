@@ -270,7 +270,7 @@ def print_activations(t):
 
 def show_all_variables():
     total_count = 0
-    for idx, op in enumerate(tf.trainable_variables()):
+    for idx, op in enumerate(tf.compat.v1.trainable_variables()):
         shape = op.get_shape()
         count = np.prod(shape)
         logger.info("[%2d] %s %s = %s" % (idx, op.name, shape, count))

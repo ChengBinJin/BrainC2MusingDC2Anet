@@ -214,7 +214,7 @@ class DC2Anet(object):
         self.print_network_vars(is_print=True)
 
     def optimizer(self, loss, variables, name='Adam'):
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scope(name):
             global_step = tf.Variable(0, trainable=False)
             starter_learning_rate = self.flags.learning_rate
             end_learning_rate = 0.
@@ -222,13 +222,13 @@ class DC2Anet(object):
             decay_steps = self.decay_steps
 
             learning_rate = (tf.where(tf.greater_equal(global_step, start_decay_step),
-                                      tf.train.polynomial_decay(starter_learning_rate,
+                                      tf.compat.v1.train.polynomial_decay(starter_learning_rate,
                                                                 global_step - start_decay_step,
                                                                 decay_steps, end_learning_rate, power=1.0),
                                       starter_learning_rate))
-            tf.summary.scalar('{}/learning_rate'.format(name), learning_rate)
+            tf.compat.v1.summary.scalar('{}/learning_rate'.format(name), learning_rate)
 
-            learn_step = tf.train.AdamOptimizer(learning_rate, beta1=self.flags.beta1).\
+            learn_step = tf.compat.v1.train.AdamOptimizer(learning_rate, beta1=self.flags.beta1).\
                 minimize(loss, global_step=global_step, var_list=variables)
 
             return learn_step
@@ -316,29 +316,29 @@ class DC2Anet(object):
         return loss
 
     def _tensorboard(self):
-        tf.summary.scalar('loss/G_loss', self.G_loss_sup)
-        tf.summary.scalar('loss/G_gen', self.G_gen_loss_sup)
-        tf.summary.scalar('loss/Dy_dis', self.Dy_dis_loss_sup)
-        tf.summary.scalar('loss/F_loss', self.F_loss_sup)
-        tf.summary.scalar('loss/F_gen', self.F_gen_loss_sup)
-        tf.summary.scalar('loss/Dx_dis', self.Dx_dis_loss_sup)
+        tf.compat.v1.summary.scalar('loss/G_loss', self.G_loss_sup)
+        tf.compat.v1.summary.scalar('loss/G_gen', self.G_gen_loss_sup)
+        tf.compat.v1.summary.scalar('loss/Dy_dis', self.Dy_dis_loss_sup)
+        tf.compat.v1.summary.scalar('loss/F_loss', self.F_loss_sup)
+        tf.compat.v1.summary.scalar('loss/F_gen', self.F_gen_loss_sup)
+        tf.compat.v1.summary.scalar('loss/Dx_dis', self.Dx_dis_loss_sup)
 
         if self.is_cycle_consistent:
-            tf.summary.scalar('loss/cycle', self.cycle_loss)
+            tf.compat.v1.summary.scalar('loss/cycle', self.cycle_loss)
         if self.is_voxel:
-            tf.summary.scalar('loss/G_cond', self.G_cond_loss)
-            tf.summary.scalar('loss/F_cond', self.F_cond_loss)
+            tf.compat.v1.summary.scalar('loss/G_cond', self.G_cond_loss)
+            tf.compat.v1.summary.scalar('loss/F_cond', self.F_cond_loss)
         if self.is_gdl:
-            tf.summary.scalar('loss/G_gdl', self.G_gdl_loss)
-            tf.summary.scalar('loss/F_gdl', self.F_gdl_loss)
+            tf.compat.v1.summary.scalar('loss/G_gdl', self.G_gdl_loss)
+            tf.compat.v1.summary.scalar('loss/F_gdl', self.F_gdl_loss)
         if self.is_perceptual:
-            tf.summary.scalar('loss/G_perceptual', self.G_perceptual_loss)
-            tf.summary.scalar('loss/F_perceptual', self.F_perceputal_loss)
+            tf.compat.v1.summary.scalar('loss/G_perceptual', self.G_perceptual_loss)
+            tf.compat.v1.summary.scalar('loss/F_perceptual', self.F_perceputal_loss)
         if self.is_ssim:
-            tf.summary.scalar('loss/G_ssim', self.G_ssim_loss)
-            tf.summary.scalar('loss/F_ssim', self.F_ssim_loss)
+            tf.compat.v1.summary.scalar('loss/G_ssim', self.G_ssim_loss)
+            tf.compat.v1.summary.scalar('loss/F_ssim', self.F_ssim_loss)
 
-        self.summary_op = tf.summary.merge_all()
+        self.summary_op = tf.compat.v1.summary.merge_all()
 
     def print_network_vars(self, is_print=False):
         if is_print:
