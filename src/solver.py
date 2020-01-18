@@ -35,7 +35,7 @@ class Solver(object):
         self.model = DC2Anet(self.sess, self.flags, self.dataset.image_size, self.dataset(self.flags.is_train),
                              log_path=self.log_out_dir)
 
-        self.saver = tf.compat.v1.train.Saver()
+        self.saver = tf.compat.v1.train.Saver(max_to_keep=1)
         self.sess.run(tf.compat.v1.global_variables_initializer())
 
         tf_utils.show_all_variables()
@@ -43,28 +43,28 @@ class Solver(object):
     def _make_folders(self):
         if self.flags.is_train:  # train stage
             if self.flags.load_model is None:
-                cur_time = datetime.now().strftime("%Y%m%d-%H%M")
-                self.model_out_dir = "{}/model/{}".format(self.flags.dataset, cur_time)
+                cur_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+                self.model_out_dir = "../{}/model/{}".format(self.flags.dataset, cur_time)
                 if not os.path.isdir(self.model_out_dir):
                     os.makedirs(self.model_out_dir)
             else:
                 cur_time = self.flags.load_model
-                self.model_out_dir = "{}/model/{}".format(self.flags.dataset, self.flags.load_model)
+                self.model_out_dir = "../{}/model/{}".format(self.flags.dataset, self.flags.load_model)
 
-            self.sample_out_dir = "{}/sample/{}".format(self.flags.dataset, cur_time)
+            self.sample_out_dir = "../{}/sample/{}".format(self.flags.dataset, cur_time)
             if not os.path.isdir(self.sample_out_dir):
                 os.makedirs(self.sample_out_dir)
 
-            self.log_out_dir = "{}/logs/{}".format(self.flags.dataset, cur_time)
-            self.train_writer = tf.compat.v1.summary.FileWriter("{}/logs/{}".format(self.flags.dataset, cur_time),
+            self.log_out_dir = "../{}/logs/{}".format(self.flags.dataset, cur_time)
+            self.train_writer = tf.compat.v1.summary.FileWriter("../{}/logs/{}".format(self.flags.dataset, cur_time),
                                                                 graph_def=self.sess.graph_def)
 
         elif not self.flags.is_train:  # test stage
-            self.model_out_dir = "{}/model/{}".format(self.flags.dataset, self.flags.load_model)
-            self.test_out_dir = "{}/test/{}".format(self.flags.dataset, self.flags.load_model)
+            self.model_out_dir = "../{}/model/{}".format(self.flags.dataset, self.flags.load_model)
+            self.test_out_dir = "../{}/test/{}".format(self.flags.dataset, self.flags.load_model)
             self.eval_out_dir = "../eval/DC2Anet"
             self.gt_out_dir = "../eval/gt"
-            self.log_out_dir = "{}/logs/{}".format(self.flags.dataset, self.flags.load_model)
+            self.log_out_dir = "../{}/logs/{}".format(self.flags.dataset, self.flags.load_model)
 
             if not os.path.isdir(self.test_out_dir):
                 os.makedirs(self.test_out_dir)
