@@ -10,6 +10,7 @@ import logging
 import collections
 import numpy as np
 import matplotlib as mpl
+
 mpl.use('TkAgg')  # or whatever other backend that you want to solve Segmentation fault (core dumped)
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -20,6 +21,8 @@ import tensorflow_utils as tf_utils
 import utils as utils
 from vgg16 import VGG16
 from reader import Reader
+from tensorflow.compat.v1 import placeholder
+from tensorflow.compat.v1.summary import scalar
 
 logger = logging.getLogger(__name__)  # logger
 logger.setLevel(logging.INFO)
@@ -62,47 +65,54 @@ class DC2Anet(object):
         self._G_gen_train_ops, self._F_gen_train_ops = [], []
         self._Dy_dis_train_ops, self._Dx_dis_train_ops = [], []
 
-        self._init_logger()     # init logger
-        self._build_net()       # init graph
-        self._tensorboard()     # init tensorboard
+        self._init_logger()  # init logger
+        self._build_net()  # init graph
+        self._tensorboard()  # init tensorboard
 
     def _init_logger(self):
         if self.flags.is_train:
             tf_utils.init_logger(self.log_path)
 
+    # TODO : fork
     def _build_net(self):
         # tfph: TensorFlow PlaceHolder
-        self.x_test_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, *self.img_size], name='x_test_tfph')
-        self.y_test_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, *self.img_size], name='y_test_tfph')
+        self.x_test_tfph = placeholder(tf.float32, shape=[None, *self.img_size], name='x_test_tfph')
+        self.y_test_tfph = placeholder(tf.float32, shape=[None, *self.img_size], name='y_test_tfph')
 
         # Supervised learning placeholders for Image Pool Tech.
-        self.xy_fake_pairs_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 2],
-                                                 name='xy_fake_pairs_tfph')
-        self.yx_fake_pairs_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 2],
-                                                 name='yx_fake_pairs_tfph')
+        self.xy_fake_pairs_tfph = placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 2],
+                                              name='xy_fake_pairs_tfph')
+        self.yx_fake_pairs_tfph = placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 2],
+                                              name='yx_fake_pairs_tfph')
 
         # Unsupervised learning placeholders for Image Pool Tech.
-        self.xy_fake_unpairs_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 1],
-                                                   name='xy_fake_unpairs_tfph')
-        self.yx_fake_unpairs_tfph = tf.compat.v1.placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 1],
-                                                   name='yx_fake_unpairs_tfph')
+        self.xy_fake_unpairs_tfph = placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 1],
+                                                name='xy_fake_unpairs_tfph')
+        self.yx_fake_unpairs_tfph = placeholder(tf.float32, shape=[None, self.img_size[0], self.img_size[1], 1],
+                                                name='yx_fake_unpairs_tfph')
 
         self.G_gen = Generator(name='G', ngf=self.ngf, norm=self.norm, image_size=self.img_size,
                                _ops=self._G_gen_train_ops)
+
         self.Dy_dis_sup = Discriminator(
             name='Dy_sup', ndf=self.ndf, norm=self.norm, model=self.flags.dis_model, shared_reuse=False,
             _ops=self._Dy_dis_train_ops)
+
         self.Dy_dis_unsup = Discriminator(
             name='Dy_unsup', ndf=self.ndf, norm=self.norm, model=self.flags.dis_model, shared_reuse=True,
             _ops=self._Dy_dis_train_ops)
+
         self.F_gen = Generator(
             name='F', ngf=self.ngf, norm=self.norm, image_size=self.img_size, _ops=self._F_gen_train_ops)
+
         self.Dx_dis_sup = Discriminator(
             name='Dx_sup', ndf=self.ndf, norm=self.norm, model=self.flags.dis_model, shared_reuse=False,
             _ops=self._Dx_dis_train_ops)
+
         self.Dx_dis_unsup = Discriminator(
             name='Dx_unsup', ndf=self.ndf, norm=self.norm, model=self.flags.dis_model, shared_reuse=True,
             _ops=self._Dx_dis_train_ops)
+
         self.vggModel = VGG16(name='VGG16_Pretrained')
 
         data_reader = Reader(self.data_path, name='data', image_size=self.img_size, batch_size=self.flags.batch_size,
@@ -135,7 +145,7 @@ class DC2Anet(object):
         self.G_perceptual_loss = self.perceptual_loss_fn(preds=self.fake_y_imgs, gts=self.y_imgs)
         self.G_ssim_loss = self.ssim_loss_fn(preds=self.fake_y_imgs, gts=self.y_imgs)
         self.G_loss_sup = self.G_gen_loss_sup + self.G_cond_loss + self.cycle_loss + self.G_gdl_loss + \
-                      self.G_perceptual_loss + self.G_ssim_loss
+                          self.G_perceptual_loss + self.G_ssim_loss
         self.Dy_dis_loss_sup = self.discriminator_loss(
             self.Dy_dis_sup, self.xy_real_pairs, self.xy_fake_pairs_tfph, is_lsgan=self.is_lsgan)
 
@@ -157,7 +167,7 @@ class DC2Anet(object):
         self.F_perceputal_loss = self.perceptual_loss_fn(preds=self.fake_x_imgs, gts=self.x_imgs)
         self.F_ssim_loss = self.ssim_loss_fn(preds=self.fake_x_imgs, gts=self.x_imgs)
         self.F_loss_sup = self.F_gen_loss_sup + self.F_cond_loss + self.cycle_loss + self.F_gdl_loss + \
-                      self.F_perceputal_loss + self.F_ssim_loss
+                          self.F_perceputal_loss + self.F_ssim_loss
         self.Dx_dis_loss_sup = self.discriminator_loss(
             self.Dx_dis_sup, self.yx_real_pairs, self.yx_fake_pairs_tfph, is_lsgan=self.is_lsgan)
 
@@ -223,12 +233,12 @@ class DC2Anet(object):
 
             learning_rate = (tf.where(tf.greater_equal(global_step, start_decay_step),
                                       tf.compat.v1.train.polynomial_decay(starter_learning_rate,
-                                                                global_step - start_decay_step,
-                                                                decay_steps, end_learning_rate, power=1.0),
+                                                                          global_step - start_decay_step,
+                                                                          decay_steps, end_learning_rate, power=1.0),
                                       starter_learning_rate))
-            tf.compat.v1.summary.scalar('{}/learning_rate'.format(name), learning_rate)
+            scalar('{}/learning_rate'.format(name), learning_rate)
 
-            learn_step = tf.compat.v1.train.AdamOptimizer(learning_rate, beta1=self.flags.beta1).\
+            learn_step = tf.compat.v1.train.AdamOptimizer(learning_rate, beta1=self.flags.beta1). \
                 minimize(loss, global_step=global_step, var_list=variables)
 
             return learn_step
@@ -287,7 +297,6 @@ class DC2Anet(object):
 
         return ssim_loss
 
-
     def generator_loss(self, dis_obj, fake_img):
         if self.is_lsgan:  # Use LSGAN loss
             # use mean squared error
@@ -316,27 +325,27 @@ class DC2Anet(object):
         return loss
 
     def _tensorboard(self):
-        tf.compat.v1.summary.scalar('loss/G_loss', self.G_loss_sup)
-        tf.compat.v1.summary.scalar('loss/G_gen', self.G_gen_loss_sup)
-        tf.compat.v1.summary.scalar('loss/Dy_dis', self.Dy_dis_loss_sup)
-        tf.compat.v1.summary.scalar('loss/F_loss', self.F_loss_sup)
-        tf.compat.v1.summary.scalar('loss/F_gen', self.F_gen_loss_sup)
-        tf.compat.v1.summary.scalar('loss/Dx_dis', self.Dx_dis_loss_sup)
+        scalar('loss/G_loss', self.G_loss_sup)
+        scalar('loss/G_gen', self.G_gen_loss_sup)
+        scalar('loss/Dy_dis', self.Dy_dis_loss_sup)
+        scalar('loss/F_loss', self.F_loss_sup)
+        scalar('loss/F_gen', self.F_gen_loss_sup)
+        scalar('loss/Dx_dis', self.Dx_dis_loss_sup)
 
         if self.is_cycle_consistent:
-            tf.compat.v1.summary.scalar('loss/cycle', self.cycle_loss)
+            scalar('loss/cycle', self.cycle_loss)
         if self.is_voxel:
-            tf.compat.v1.summary.scalar('loss/G_cond', self.G_cond_loss)
-            tf.compat.v1.summary.scalar('loss/F_cond', self.F_cond_loss)
+            scalar('loss/G_cond', self.G_cond_loss)
+            scalar('loss/F_cond', self.F_cond_loss)
         if self.is_gdl:
-            tf.compat.v1.summary.scalar('loss/G_gdl', self.G_gdl_loss)
-            tf.compat.v1.summary.scalar('loss/F_gdl', self.F_gdl_loss)
+            scalar('loss/G_gdl', self.G_gdl_loss)
+            scalar('loss/F_gdl', self.F_gdl_loss)
         if self.is_perceptual:
-            tf.compat.v1.summary.scalar('loss/G_perceptual', self.G_perceptual_loss)
-            tf.compat.v1.summary.scalar('loss/F_perceptual', self.F_perceputal_loss)
+            scalar('loss/G_perceptual', self.G_perceptual_loss)
+            scalar('loss/F_perceptual', self.F_perceputal_loss)
         if self.is_ssim:
-            tf.compat.v1.summary.scalar('loss/G_ssim', self.G_ssim_loss)
-            tf.compat.v1.summary.scalar('loss/F_ssim', self.F_ssim_loss)
+            scalar('loss/G_ssim', self.G_ssim_loss)
+            scalar('loss/F_ssim', self.F_ssim_loss)
 
         self.summary_op = tf.compat.v1.summary.merge_all()
 
@@ -364,8 +373,8 @@ class DC2Anet(object):
             [self.xy_fake_pairs, self.yx_fake_pairs, self.fake_y_imgs, self.fake_x_imgs])
 
         inte_ops = [self.optims_integrated,
-                   self.G_gen_loss_integrated, self.Dy_dis_loss_integrated,
-                   self.F_gen_loss_integrated, self.Dx_dis_loss_integrated]
+                    self.G_gen_loss_integrated, self.Dy_dis_loss_integrated,
+                    self.F_gen_loss_integrated, self.Dx_dis_loss_integrated]
 
         feed_dict_sup = {self.xy_fake_pairs_tfph: self.fake_xy_pool_obj_sup.query(xy_fake_pairs),
                          self.yx_fake_pairs_tfph: self.fake_yx_pool_obj_sup.query(yx_fake_pairs),
@@ -377,7 +386,6 @@ class DC2Anet(object):
 
         return [G_gen_loss_integrated, Dy_dis_loss_integrated, F_gen_loss_integrated, Dx_dis_loss_integrated]
 
-
     def train_step_sup(self):
         # Supervised learning
         xy_fake_pairs, yx_fake_pairs = self.sess.run([self.xy_fake_pairs, self.yx_fake_pairs])
@@ -387,8 +395,9 @@ class DC2Anet(object):
                    self.F_loss_sup, self.F_gen_loss_sup, self.F_cond_loss,
                    self.F_gdl_loss, self.F_perceputal_loss, self.F_ssim_loss, self.Dx_dis_loss_sup,
                    self.summary_op]
+
         feed_dict_sup = {self.xy_fake_pairs_tfph: self.fake_xy_pool_obj_sup.query(xy_fake_pairs),
-                     self.yx_fake_pairs_tfph: self.fake_yx_pool_obj_sup.query(yx_fake_pairs)}
+                         self.yx_fake_pairs_tfph: self.fake_yx_pool_obj_sup.query(yx_fake_pairs)}
 
         _, G_loss_sup, G_gen_loss_sup, G_cond_loss, G_gdl_loss, G_perceptual_loss, G_ssim_loss, cycle_loss, \
         Dy_loss_sup, F_loss_sup, F_gen_loss_sup, F_cond_loss, F_gdl_loss, F_perceptual_loss, F_ssim_loss, Dx_loss_sup, \
@@ -459,7 +468,6 @@ class DC2Anet(object):
 
             utils.print_metrics(iter_time, ord_output)
 
-
     @staticmethod
     def plots(imgs, iter_time, image_size, save_file):
         # parameters for plot size
@@ -491,14 +499,14 @@ class DC2Anet(object):
 
         canvas = np.zeros((self.img_size[0], num_imgs * self.img_size[1]), np.uint8)
         for idx in range(num_imgs):
-            canvas[:, idx * self.img_size[1]: (idx+1) * self.img_size[1]] = \
+            canvas[:, idx * self.img_size[1]: (idx + 1) * self.img_size[1]] = \
                 np.squeeze(255. * utils.inverse_transform(imgs[idx]))
 
         img_name_ = img_name.astype('U26')[0]
         # save imgs on test folder
         cv2.imwrite(os.path.join(save_file, img_name_), canvas)
         # save imgs on eval folder
-        cv2.imwrite(os.path.join(eval_file, img_name_), canvas[:,self.img_size[1]:2*self.img_size[1]])
+        cv2.imwrite(os.path.join(eval_file, img_name_), canvas[:, self.img_size[1]:2 * self.img_size[1]])
         # save imgs on gt folder
         # cv2.imwrite(os.path.join(gt_file, img_name_), canvas[:, 2*self.img_size[1]:3*self.img_size[1]])
 
@@ -518,41 +526,25 @@ class Generator(object):
 
             # (N, H, W, C) -> (N, H, W, 64)
             conv1 = tf_utils.padding2d(x, p_h=3, p_w=3, pad_type='REFLECT', name='conv1_padding')
-            conv1 = tf_utils.conv2d(conv1, self.ngf, k_h=7, k_w=7, d_h=1, d_w=1, padding='VALID',
-                                    name='conv1_conv')
-            conv1 = tf_utils.norm(conv1, _type='instance', _ops=self._ops, name='conv1_norm')
-            conv1 = tf_utils.relu(conv1, name='conv1_relu', is_print=True)
-
+            conv1 = tf.utils.conv_norm_relu(conv1, self.ngf, k_h=7, k_w=7, d_h=1, d_w=1,
+                                            padding='VALID', name='conv1_conv', ops=self._ops)
             # (N, H, W, 64)  -> (N, H/2, W/2, 128)
-            conv2 = tf_utils.conv2d(conv1, 2*self.ngf, k_h=3, k_w=3, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm',)
-            conv2 = tf_utils.relu(conv2, name='conv2_relu', is_print=True)
-
+            conv2 = tf.utils.conv_norm_relu(conv1, 2 * self.ngf, k_h=3, k_w=3, d_h=2, d_w=2,
+                                            padding='SAME', name='conv2_conv', ops=self._ops)
             # (N, H/2, W/2, 128) -> (N, H/4, W/4, 256)
-            conv3 = tf_utils.conv2d(conv2, 4*self.ngf, k_h=3, k_w=3, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm',)
-            conv3 = tf_utils.relu(conv3, name='conv3_relu', is_print=True)
-
+            conv3 = tf_utils.conv2d(conv2, 4 * self.ngf, k_h=3, k_w=3, d_h=2, d_w=2, padding='SAME',
+                                    name='conv3_conv', ops=self._ops)
             # (N, H/4, W/4, 256) -> (N, H/4, W/4, 256)
-            if (self.image_size[0] <= 128) and (self.image_size[1] <= 128):
+            if self.image_size[0] <= 128 and self.image_size[1] <= 128:
                 # use 6 residual blocks for 128x128 images
                 res_out = tf_utils.n_res_blocks(conv3, num_blocks=6, is_print=True)
             else:
                 # use 9 blocks for higher resolution
                 res_out = tf_utils.n_res_blocks(conv3, num_blocks=9, is_print=True)
-
             # (N, H/4, W/4, 256) -> (N, H/2, W/2, 128)
-            conv4 = tf_utils.deconv2d(res_out, 2*self.ngf, name='conv4_deconv2d')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.relu(conv4, name='conv4_relu', is_print=True)
-
+            conv4 = tf_utils.deconv_norm_relu(res_out, 2 * self.ngf, name='conv4_deconv2d', ops=self._ops)
             # (N, H/2, W/2, 128) -> (N, H, W, 64)
-            conv5 = tf_utils.deconv2d(conv4, self.ngf, name='conv5_deconv2d')
-            conv5 = tf_utils.norm(conv5, _type='instance', _ops=self._ops, name='conv5_norm')
-            conv5 = tf_utils.relu(conv5, name='conv5_relu', is_print=True)
-
+            conv5 = tf_utils.deconv_norm_relu(conv4, self.ngf, name='conv5_deconv2d', ops=self._ops)
             # (N, H, W, 64) -> (N, H, W, 1)
             conv6 = tf_utils.padding2d(conv5, p_h=3, p_w=3, pad_type='REFLECT', name='output_padding')
             conv6 = tf_utils.conv2d(conv6, self.image_size[2], k_h=7, k_w=7, d_h=1, d_w=1,
@@ -577,26 +569,15 @@ class Discriminator(object):
         self.shared_reuse = shared_reuse
         self.model = model
         self.variables = None
+        # self.models = [self.model_a, self.model_b, self.model_c, self.model_d,
+        #                self.model_e, self.model_f, self.model_g]
 
     def __call__(self, x):
-        if self.model.lower() == 'a':
-            output = self.model_a(x)
-        elif self.model.lower() == 'b':
-            output = self.model_b(x)
-        elif self.model.lower() == 'c':
-            output = self.model_c(x)
-        elif self.model.lower() == 'd':
-            output = self.model_d(x)
-        elif self.model.lower() == 'e':
-            output = self.model_e(x)
-        elif self.model.lower() == 'f':
-            output = self.model_f(x)
-        elif self.model.lower() == 'g':
-            output = self.model_g(x)
-        else:
-            raise NotImplementedError
-
-        return output
+        method_name = 'model_' + self.model.lower()
+        method = getattr(self, method_name)
+        if method is None:
+            raise NotImplementedError()
+        return method(x)
 
     def model_a(self, x):
         with tf.compat.v1.variable_scope(self.name, reuse=self.reuse):
@@ -609,22 +590,15 @@ class Discriminator(object):
 
         with tf.compat.v1.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
-
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.conv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv4_conv', ops=self._ops)
 
         with tf.compat.v1.variable_scope(self.name, reuse=self.reuse):
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
@@ -637,7 +611,8 @@ class Discriminator(object):
         self.reuse = True
         self.shared_reuse = True
         self.variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
-        self.variables += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=self.shared_name)
+        self.variables += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,
+                                                      scope=self.shared_name)
 
         return output
 
@@ -650,24 +625,17 @@ class Discriminator(object):
                                     name='conv1_conv')
             conv1 = tf_utils.lrelu(conv1, name='conv1_lrelu', is_print=True)
 
+            conv2 = tf.utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
 
         with tf.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
-
+            conv3 = tf.utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf.utils.conv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv4_conv', ops=self._ops)
 
         with tf.variable_scope(self.name, reuse=self.reuse):
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
@@ -695,23 +663,17 @@ class Discriminator(object):
 
         with tf.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
 
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
         with tf.variable_scope(self.name, reuse=self.reuse):
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.conv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv4_conv', ops=self._ops)
 
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
             conv5 = tf_utils.conv2d(conv4, 1, k_h=4, k_w=4, d_h=1, d_w=1, padding='SAME',
@@ -737,24 +699,18 @@ class Discriminator(object):
             conv1 = tf_utils.lrelu(conv1, name='conv1_lrelu', is_print=True)
 
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
 
         with tf.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
         with tf.variable_scope(self.name, reuse=self.reuse):
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.deconv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                               name='conv4_conv', ops=self._ops)
 
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
             conv5 = tf_utils.conv2d(conv4, 1, k_h=4, k_w=4, d_h=1, d_w=1, padding='SAME',
@@ -780,23 +736,17 @@ class Discriminator(object):
             conv1 = tf_utils.lrelu(conv1, name='conv1_lrelu', is_print=True)
 
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
 
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
         with tf.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.conv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv4_conv', ops=self._ops)
 
         with tf.variable_scope(self.name, reuse=self.reuse):
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
@@ -824,23 +774,17 @@ class Discriminator(object):
 
         with tf.variable_scope(self.shared_name, reuse=self.shared_reuse):
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
 
         with tf.variable_scope(self.name, reuse=self.reuse):
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.conv_norm_lrelu(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv4_conv', ops=self._ops)
 
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
             conv5 = tf_utils.conv2d(conv4, 1, k_h=4, k_w=4, d_h=1, d_w=1, padding='SAME',
@@ -866,22 +810,16 @@ class Discriminator(object):
             conv1 = tf_utils.lrelu(conv1, name='conv1_lrelu', is_print=True)
 
             # (N, H/2, W/2, 64) -> (N, H/4, W/4, 128)
-            conv2 = tf_utils.conv2d(conv1, 2*self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv2_conv')
-            conv2 = tf_utils.norm(conv2, _type='instance', _ops=self._ops, name='conv2_norm')
-            conv2 = tf_utils.lrelu(conv2, name='conv2_lrelu', is_print=True)
+            conv2 = tf_utils.conv_norm_lrelu(conv1, 2 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv2_conv', ops=self._ops)
 
             # (N, H/4, W/4, 128) -> (N, H/8, W/8, 256)
-            conv3 = tf_utils.conv2d(conv2, 4*self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv3_conv')
-            conv3 = tf_utils.norm(conv3, _type='instance', _ops=self._ops, name='conv3_norm')
-            conv3 = tf_utils.lrelu(conv3, name='conv3_lrelu', is_print=True)
+            conv3 = tf_utils.conv_norm_lrelu(conv2, 4 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                             name='conv3_conv', ops=self._ops)
 
             # (N, H/8, W/8, 256) -> (N, H/16, W/16, 512)
-            conv4 = tf_utils.conv2d(conv3, 8*self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
-                                    name='conv4_conv')
-            conv4 = tf_utils.norm(conv4, _type='instance', _ops=self._ops, name='conv4_norm')
-            conv4 = tf_utils.lrelu(conv4, name='conv4_lrelu', is_print=True)
+            conv4 = tf_utils.conv2d(conv3, 8 * self.ndf, k_h=4, k_w=4, d_h=2, d_w=2, padding='SAME',
+                                    name='conv4_conv', ops=self._ops)
 
             # (N, H/16, W/16, 512) -> (N, H/16, W/16, 1)
             conv5 = tf_utils.conv2d(conv4, 1, k_h=4, k_w=4, d_h=1, d_w=1, padding='SAME',
@@ -894,4 +832,3 @@ class Discriminator(object):
             self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
 
             return output
-
