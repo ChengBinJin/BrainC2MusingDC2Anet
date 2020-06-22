@@ -569,16 +569,15 @@ class Discriminator(object):
         self.shared_reuse = shared_reuse
         self.model = model
         self.variables = None
-        self.models = [self.model_a, self.model_b, self.model_c, self.model_d,
-                       self.model_e, self.model_f, self.model_g]
+        # self.models = [self.model_a, self.model_b, self.model_c, self.model_d,
+        #                self.model_e, self.model_f, self.model_g]
 
     def __call__(self, x):
-        model_index = int(self.model.lower()) - int('a')
-        if 0 <= model_index <= 6:
-            output = self.models[model_index](x)
-            return output
-        else:
-            raise NotImplementedError
+        method_name = 'model_' + self.model.lower()
+        method = getattr(self, method_name)
+        if method is None:
+            raise NotImplementedError()
+        return method(x)
 
     def model_a(self, x):
         with tf.compat.v1.variable_scope(self.name, reuse=self.reuse):
