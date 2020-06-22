@@ -286,3 +286,27 @@ def batch_convert2int(images):
 def convert2int(image):
     # transform from float tensor ([-1.,1.]) to int image ([0,255])
     return tf.image.convert_image_dtype((image + 1.0) / 2.0, tf.uint8)
+
+
+def conv_norm_relu(input_tensor, ngf, k_h, k_w, d_h, d_w, padding, name, ops):
+    conv = conv2d(input_tensor, ngf, k_h, k_w, d_h, d_w, padding, name)
+    conv = norm(conv, _type='instance', _ops=ops, name=name, )
+    conv = relu(conv, name=name, is_print=True)
+
+    return conv
+
+
+def deconv_norm_relu(input_tensor, ngf, name, ops):
+    deconv = deconv2d(input_tensor, ngf, name)
+    deconv = norm(deconv, _type='instance', _ops=ops, name=name)
+    deconv = relu(deconv, name=name, is_print=True)
+
+    return deconv
+
+
+def conv_norm_lrelu(input_tensor, ngf, k_h, k_w, d_h, d_w, padding, name, ops):
+    conv = conv2d(input_tensor, ngf, k_h, k_w, d_h, d_w, padding, name)
+    conv = norm(conv, _type='instance', _ops=ops, name=name, )
+    conv = lrelu(conv, name=name, is_print=True)
+
+    return conv
