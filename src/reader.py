@@ -15,39 +15,64 @@ class Reader(object):
         self.ori_img_size = image_size
         self.resize_factor = 1.05
         self.rotate_angle = 5.
-        self.image_size = (image_size[0], 2 * image_size[1] ,image_size[2])  # H, 2W, C
+        self.image_size = (image_size[0], 2 * image_size[1], image_size[2])  # H, 2W, C
 
         self.min_queue_examples = min_queue_examples
         self.batch_size = batch_size
         self.num_threads = num_threads
-        self.reader = tf.TFRecordReader()
+        # self.reader = tf.TFRecordReader()
         self.is_train = is_train
         self.name = name
 
+        self.image_features = {
+            'image/file_name': tf.io.FixedLenFeature([], tf.string),
+            'image/encoded_image': tf.io.FixedLenFeature([], tf.string)
+        }
+
+    def _parse_image_function(self, serialized):
+        features = tf.io.parse_single_example(serialized, self.image_features)
+        image_buffer = features['image/encoded_image']
+        image_name_buffer = features['image/file_name']
+
+        image = tf.image.decode_jpeg(image_buffer, channels=self.image_size[2])
+
+        x_img, y_img, x_img_ori, y_img_ori = self._preprocess(image, is_train=self.is_train)
+
+        return x_img, y_img, x_img_ori, y_img_ori, image_name_buffer
+
     def feed(self):
         with tf.name_scope(self.name):
-            filename_queue = tf.train.string_input_producer([self.tfrecords_file])
-
-            _, serialized_example = self.reader.read(filename_queue)
-            features = tf.io.parse_single_example(serialized_example, features={
-                'image/file_name': tf.io.FixedLenFeature([], tf.string),
-                'image/encoded_image': tf.io.FixedLenFeature([], tf.string)})
-
-            image_buffer = features['image/encoded_image']
-            img_name_buffer = features['image/file_name']
-            image = tf.image.decode_jpeg(image_buffer, channels=self.image_size[2])
-            x_img, y_img, x_img_ori, y_img_ori = self._preprocess(image, is_train=self.is_train)
+            raw_image_dataset = tf.data.TFRecordDataset(self.tfrecords_file)
+            parsed_image_dataset = raw_image_dataset.map(self._parse_image_function)
 
             if self.is_train:
-                x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = tf.train.shuffle_batch(
-                    [x_img, y_img, x_img_ori, y_img_ori, img_name_buffer], batch_size=self.batch_size,
-                    num_threads=self.num_threads, capacity=self.min_queue_examples + 3 * self.batch_size,
-                    min_after_dequeue=self.min_queue_examples)
+                x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = parsed_image_dataset \
+                    .shuffle(self.min_queue_examples).batch(self.batch_size).make_one_shot_iterator().get_next()
             else:
-                x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = tf.train.batch(
-                    [x_img, y_img, x_img_ori, y_img_ori, img_name_buffer], batch_size=self.batch_size,
-                    num_threads=1, capacity=self.min_queue_examples + 3 * self.batch_size,
-                    allow_smaller_final_batch=True)
+                x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = parsed_image_dataset \
+                    .batch(self.batch_size).make_one_shot_iterator().get_next()
+
+            # filename_queue = tf.train.string_input_producer([self.tfrecords_file])
+            #
+            # _, serialized_example = self.reader.read(filename_queue)
+            # features = tf.io.parse_single_example(serialized_example, features=self.image_features)
+            #
+            # image_buffer = features['image/encoded_image']
+            # img_name_buffer = features['image/file_name']
+            #
+            # image = tf.image.decode_jpeg(image_buffer, channels=self.image_size[2])
+            # x_img, y_img, x_img_ori, y_img_ori = self._preprocess(image, is_train=self.is_train)
+            #
+            # if self.is_train:
+            #     x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = tf.train.shuffle_batch(
+            #         [x_img, y_img, x_img_ori, y_img_ori, img_name_buffer], batch_size=self.batch_size,
+            #         num_threads=self.num_threads, capacity=self.min_queue_examples + 3 * self.batch_size,
+            #         min_after_dequeue=self.min_queue_examples)
+            # else:
+            #     x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name = tf.train.batch(
+            #         [x_img, y_img, x_img_ori, y_img_ori, img_name_buffer], batch_size=self.batch_size,
+            #         num_threads=1, capacity=self.min_queue_examples + 3 * self.batch_size,
+            #         allow_smaller_final_batch=True)
 
         return x_imgs, y_imgs, x_imgs_ori, y_imgs_ori, img_name
 
